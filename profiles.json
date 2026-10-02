@@ -1,0 +1,6 @@
+{
+  "fast": {"codex_model":"gpt-6-luna","effort":"medium","claude_model":"haiku"},
+  "balanced": {"codex_model":"gpt-6.1-sol","effort":"medium","claude_model":"sonnet"},
+  "deep": {"codex_model":"gpt-6-astra","effort":"high","claude_model":"opus"},
+  "review": {"codex_model":"gpt-6.1-sol","effort":"high","claude_model":"sonnet"}
+}

@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "protected_roots": ["C:/Users/guyr2/Documents/vena/keepHQ"],
+  "max_children": 3,
+  "hook_context_chars": 1600,
+  "verification_timeout_seconds": 600,
+  "max_snapshot_files": 50000,
+  "max_snapshot_bytes": 536870912,
+  "event_retention_days": 30,
+  "fact_max_age_days": 30
+}

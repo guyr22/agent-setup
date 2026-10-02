@@ -1,0 +1,14 @@
+{
+  "kind": "workspace",
+  "name": "Replace with workspace name",
+  "summary": "Replace with inspected purpose and routing.",
+  "sources": [],
+  "commands": [],
+  "repositories": [
+    {"path": "service", "role": "Replace with observed service responsibility", "owner": "unknown"},
+    {"path": "web", "role": "Replace with observed client responsibility", "owner": "unknown"}
+  ],
+  "contracts": [],
+  "delivery_order": [],
+  "open_questions": []
+}
