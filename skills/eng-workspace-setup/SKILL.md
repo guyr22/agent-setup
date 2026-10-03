@@ -3,7 +3,7 @@ name: eng-workspace-setup
 description: Set up multi-repository workspace navigation and coordination with ownership, design authority, contracts, revision-aware checks, and per-project instruction boundaries.
 ---
 
-Read `{{SETUP_ROOT}}/PROJECT-SETUP.md` and `{{SETUP_ROOT}}/templates/workspace-spec.example.json`. Runtime is `{{PYTHON}} {{SETUP_ROOT}}/engctl.py`. Never modify KeepHQ.
+Read `{{SETUP_ROOT}}/PROJECT-SETUP.md` and `{{SETUP_ROOT}}/templates/workspace-spec.example.json`. Runtime is `{{PYTHON}} {{SETUP_ROOT}}/engctl.py`. Respect the configured protected roots.
 
 Inspect the root and immediate repositories with `project inspect`; locate deeper/external repositories from references rather than unbounded scans. Read workspace instructions, design/delivery repositories, source indexes, contracts, and status. Do not initialize a parent Git repository, add submodules, create remotes, or move repositories.
 

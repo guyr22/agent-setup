@@ -2,6 +2,7 @@ import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -185,6 +186,8 @@ class RuntimeTests(unittest.TestCase):
     def test_config_unmanaged_collision(self):
         home = self.root / 'home'; (home / '.codex').mkdir(parents=True)
         (home / '.codex/AGENTS.md').write_text('user-owned instructions')
+        (home / '.codex/agents').mkdir()
+        (home / '.codex/agents/eng-reviewer.toml').write_text('user-owned agent')
         with self.assertRaises(ValueError): configure.build(home, self.root / 'build/deployment.json')
         with self.assertRaises(ValueError): configure.checked_target(home, '../KeepHQ/file')
 
@@ -203,13 +206,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(result['active_config_changed'])
         self.assertEqual(lib.read_json(result['proposal'])['status'], 'proposed')
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows native shell check')
     def test_hook_command_runs_in_powershell(self):
         command = configure.hook_entries('codex')['SessionStart'][0]['hooks'][0]['command']
         payload = {'hook_event_name': 'SessionStart', 'cwd': str(self.keep), 'session_id': 'fixture-native-shell'}
-        # KeepHQ no-op prevents fixture process from writing global state.
-        payload['cwd'] = lib.POLICY['protected_roots'][0]
+        # A synthetic protected root prevents fixture metadata writes on any machine.
+        local = self.root / 'local-fixture.json'
+        local.write_text(json.dumps({'protected_roots': [str(self.keep)]}))
+        env = dict(os.environ, ENG_SETUP_LOCAL_CONFIG=str(local))
         r = subprocess.run(['powershell.exe', '-NoProfile', '-Command', command], input=json.dumps(payload),
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10, env=env)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), '')
         self.assertEqual(r.stderr.strip(), '')

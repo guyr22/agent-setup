@@ -24,7 +24,7 @@ def edit_paths(payload):
 def deny():
     return {'hookSpecificOutput': {'hookEventName': 'PreToolUse',
             'permissionDecision': 'deny', 'permissionDecisionReason':
-            'This structured edit is outside the registered task write roots or touches the protected KeepHQ directory. Reconcile scope with the user instruction.'}}
+            'This structured edit is outside the registered task write roots or touches a configured protected directory. Reconcile scope with the user instruction.'}}
 
 def respond(payload):
     name = payload.get('hook_event_name', '')

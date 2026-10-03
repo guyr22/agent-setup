@@ -3,3 +3,7 @@ __pycache__/
 build/
 state/
 .test-output/
+/local.json
+/local.instructions.md
+.env
+.env.*

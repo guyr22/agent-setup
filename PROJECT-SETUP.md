@@ -8,7 +8,7 @@ Or name the directory in that request. Codex can explicitly invoke `$eng-project
 
 > Update this project's agent setup for the current code and CI. Preserve our existing instructions and decisions, and explain any questions you need me to resolve.
 
-The agent handles discovery, the specification, and the commands. You supply intent and consequential decisions that the repository does not establish. You do not need to write a configuration file yourself. KeepHQ remains excluded unless you explicitly change that boundary.
+The agent handles discovery, the specification, and the commands. You supply intent and consequential decisions that the repository does not establish. You do not need to write a configuration file yourself. Configured protected roots remain excluded unless you explicitly change those boundaries.
 
 ## How the collaboration works
 

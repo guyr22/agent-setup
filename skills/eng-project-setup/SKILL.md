@@ -3,7 +3,7 @@ name: eng-project-setup
 description: Collaboratively create or update a repository's Codex and Claude setup from its code, documentation, and the user's goals; use when asked to onboard or configure a specific project.
 ---
 
-Read `{{SETUP_ROOT}}/PROJECT-SETUP.md` for the intake, schema, commands, and update rules. Runtime: `{{PYTHON}} {{SETUP_ROOT}}/engctl.py`. KeepHQ is excluded.
+Read `{{SETUP_ROOT}}/PROJECT-SETUP.md` for the intake, schema, commands, and update rules. Runtime: `{{PYTHON}} {{SETUP_ROOT}}/engctl.py`. Respect the configured protected roots.
 
 Inspect the requested repository before interviewing the user: existing AGENTS.md/CLAUDE.md, local changes, README, CI/scripts, architecture, requirements, decisions, and knowledge indexes. Read relevant area guidance. Inspection does not execute project scripts or install dependencies. If no root can be inferred, ask for the project path before touching a repository.
 

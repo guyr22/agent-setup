@@ -1,8 +1,51 @@
 # Shared engineering setup
 
-Maintained source for Guy's Codex and Claude Code configuration. Version 1.2.0.
+Portable, Git-managed engineering workflows for Codex and Claude Code. Version 1.3.0. Python 3.11+ and Git are required; runtime dependencies are Python standard library only.
 
-This installation adds 14 skills, eight specialized roles, four Codex launch profiles, native hook definitions, and a standard-library Python runtime for project scaffolding, task evidence, project facts, and inactive improvement proposals. Existing managed plugins, auth, user preferences, and chats are preserved. No project has been configured by the installation. KeepHQ is protected from setup/runtime writes.
+This installation adds 14 skills, eight specialized roles, four Codex launch profiles, native hook definitions, and a standard-library Python runtime for project scaffolding, task evidence, project facts, and inactive improvement proposals. Existing managed plugins, auth, user preferences, and chats are preserved. Client installation creates no project setup. Machine-specific exclusions and preferences belong in ignored local configuration.
+
+## Install from a clone
+
+Keep the checkout at a stable location, for example a directory named `.agent-setup` under your user home. Installation points native hooks and skills at this checkout; it does not download Python, either client, models, plugins, or dependencies.
+
+From the checkout, preview and then apply:
+
+~~~text
+python install.py install --target both
+python install.py install --target both --apply
+python install.py status
+~~~
+
+Use `--target codex` or `--target claude` to install one client. `--home PATH` selects a native user home for an isolated installation; it is not a project path. One checkout manages one home. Targets use the standard `.codex`, `.claude`, and `.agents/skills` locations under that home; custom per-client configuration directories are not auto-discovered. On systems where Python is named `python3`, use that command instead.
+
+The installer preserves your selected main model, authentication, native permissions, trust, unrelated hooks, and existing instructions. It appends one bounded instruction block, installs the `eng-*` skills/roles, and registers the metadata hooks. Existing conflicting skills/roles or edited owned content cause an error before native writes. Inspect collisions rather than adding blanket overwrite behavior.
+
+Start fresh client sessions afterward. Review the registered hooks in each client's `/hooks`; Codex requires trust for the current definitions, and the installer never grants it. Windows hooks currently require a shell-safe Python executable path without spaces and paths without shell expansion characters. The checkout itself may contain spaces. macOS/Linux use shell-quoted hook commands; native execution on those systems still needs platform validation.
+
+### Personal configuration
+
+Optional `local.json` can contain absolute `protected_roots` and per-profile overrides under `profiles`; start with `local.example.json`. Each profile override may set `codex_model`, `claude_model`, and `effort`. Defaults are in `profiles.json`; select models available to your account. These profiles affect optional launch profiles and specialist roles, not the selected main model.
+
+Put additional personal instructions in `local.instructions.md`. Both local files are ignored by Git, included in deployment fingerprints, and reused by later installs/updates. Do not commit credentials or machine-specific native settings. `ENG_SETUP_LOCAL_CONFIG` can explicitly select another local JSON file by absolute path for a controlled environment. Use the same environment for installation and hook execution.
+
+### Update, remove, and recover
+
+~~~text
+python install.py update
+python install.py update --apply
+python install.py uninstall --target claude
+python install.py uninstall --target claude --apply
+python install.py rollback PATH_TO_RELEASE.json
+python install.py rollback PATH_TO_RELEASE.json --apply
+~~~
+
+Update defaults to the currently installed clients; `install --target` can add another client later. Uninstall removes only selected setup-owned content, restores pre-install files where appropriate, and preserves unrelated preferences and instructions added before or after updates. Owned edits block uninstall; it does not silently overwrite them. Empty directories and local runtime state are retained.
+
+Plans are saved under `build/`; exact backups, deployment records, and recovery releases are under `state/`. Keep that state with the checkout. Preview writes a plan but leaves native configuration untouched. A failed ordinary file write reverts completed writes; a process/power failure needs recovery from the saved release. Rollback rejects later file drift and applies only to the current release.
+
+Changes to this checkout's Python code affect installed hooks immediately. Develop and test in an isolated clone, inspect the source diff, and promote a reviewed revision between sessions before running `update --apply`. Do not pull unreviewed code into an active runtime. This repository has no auto-updater or scheduled model calls.
+
+**Existing installations in another directory:** use their current runtime until a deliberate migration transfers deployment ownership and runtime state, updates hook paths, and rechecks native trust. This installer refuses to claim another checkout's managed instruction blocks or overwrite its differing skills. The standalone repository was prepared independently; creating it does not move an already-active installation.
 
 ## Using the skills
 
@@ -18,12 +61,12 @@ Focused fixes stay lightweight. Planned changes add criteria/checkpoints where u
 
 ## Native files and models
 
-- Source: `C:/Users/guyr2/.codex/agent-setup`.
+- Source/runtime: the stable checkout containing this README and `install.py`.
 - Codex: `~/.codex/AGENTS.md`, `~/.agents/skills/eng-*`, `~/.codex/agents/eng-*.toml`, `~/.codex/hooks.json`, `~/.codex/eng-*.config.toml`.
 - Claude: `~/.claude/CLAUDE.md`, `skills/eng-*`, `agents/eng-*.md`, hooks merged into `settings.json`.
 - No third-party plugin installation or extra MCP server is required.
 
-The lean global agreement holds personal boundaries and workflow routing. Generic skills, roles, profiles, and hooks stay global; project requirements, commands, architecture navigation, conventions, and verified observations belong with each project. Claude discovers its own native files; references in those files call the shared Python runtime currently housed under `.codex/agent-setup`. It does not automatically load the `.codex` directory.
+The lean global agreement holds personal boundaries and workflow routing. Generic skills, roles, profiles, and hooks stay global; project requirements, commands, architecture navigation, conventions, and verified observations belong with each project. Claude discovers its own native files; references in those files call the shared Python runtime in the installation checkout. It does not automatically load the `.codex` directory.
 
 Codex has one installed copy of each `eng-*` skill in the documented user discovery directory, `~/.agents/skills`. Version 1.2 retires only previously managed legacy `~/.codex/skills/eng-*/SKILL.md` files with exact-byte backups. Unrelated skill contents are preserved. New sessions are needed to refresh already loaded instructions and skill catalogs.
 
@@ -35,10 +78,10 @@ Hooks make no network/model calls, execute no project scripts, and do not parse 
 
 ## Runtime commands
 
-Python 3.11+ is required. This host uses `C:/Python313/python.exe`. In PowerShell:
+Python 3.11+ is required. Run these examples from the checkout. In PowerShell:
 
 ```powershell
-$eng = 'C:/Users/guyr2/.codex/agent-setup/engctl.py'
+$eng = Join-Path (Get-Location) 'engctl.py'
 python -B $eng doctor
 python -B $eng project inspect 'C:/path/to/project'
 python -B $eng project draft 'C:/path/to/project' --spec 'C:/path/to/inspected-spec.json'
@@ -49,7 +92,7 @@ python -B $eng project validate 'C:/path/to/project' --spec 'C:/path/to/inspecte
 
 Specification examples live in `templates/`. The agent replaces their example content with inspected facts; they are not installed into projects automatically. `project draft --update` replaces only the bounded generated block and preserves surrounding manual instructions. Legacy blocks without an end marker and unowned registries need explicit reconciliation. Backups are stored centrally. Discovery executes no project scripts; validation checks references and imports, not command success or semantic correctness.
 
-Install paths are resolved during `config build`: maintained instructions/skills use `{{SETUP_ROOT}}` and `{{PYTHON}}`, filled from the checkout and interpreter running the build. `--home` selects the native configuration home (or use `ENG_SETUP_HOME` consistently). An alternate home requires an explicit `--output` plan. The default is the installed deployment's home, then the current OS user's home. Relocating the runtime later requires reviewing/removing old hook registrations and native trust; this release deliberately keeps the existing runtime path and hook commands.
+Install paths are resolved during `config build`: maintained instructions/skills use `{{SETUP_ROOT}}` and `{{PYTHON}}`, filled from the checkout and interpreter running the build. `--home` selects the native configuration home (or use `ENG_SETUP_HOME` consistently). An alternate home requires an explicit `--output` plan. The default is the installed deployment's home, then the current OS user's home. Relocating the runtime later requires reviewing/removing old hook registrations and native trust; installing a new clone does not automatically adopt ownership or state from an old one.
 
 For a substantial task, use the session ID supplied by SessionStart, or a unique explicit session key if hooks are inactive. Register task scope, then record checkpoints and checks:
 
@@ -81,7 +124,7 @@ A proposal requires `title`, `observations`, `hypothesis`, `change`, `risks`, `e
 
 State is local under `state/` and excluded from source Git. Runtime metadata lives in `state/runtime/runtime.sqlite3`; deployment backups and proposals remain separate. For a 1.0 installation, run `python -B $eng state migrate` once with host access before activation. This copies and preserves the legacy database and refuses to overwrite an existing destination. Use one consistent `ENG_SETUP_STATE_DIR` for CLI and hooks if relocating metadata. A state-access failure never silently creates a fallback database. Events retain metadata for 30 days, pruned at session start. Tasks/facts/proposals/backups persist until deliberately cleaned up. Do not put secrets or raw conversations in user-supplied records. Do not automatically query unrelated project scopes.
 
-On Windows, only the runtime metadata directory needs write access. Native sandbox restrictions can still block it even when an ordinary directory ACL grants access. Doctor distinguishes readable state from writable state. When writes are unavailable, run state-changing commands with authorized host access; do not create an empty fallback database or broaden sandbox permissions. The runtime never changes permissions. Structured protection of KeepHQ runs before database access, including native `apply_patch` command payloads.
+On Windows, only the runtime metadata directory needs write access. Native sandbox restrictions can still block it even when an ordinary directory ACL grants access. Doctor distinguishes readable state from writable state. When writes are unavailable, run state-changing commands with authorized host access; do not create an empty fallback database or broaden sandbox permissions. The runtime never changes permissions. Structured protection of configured excluded roots runs before database access, including native `apply_patch` command payloads.
 
 Concurrent verification and checkpoints merge inside database transactions. In-flight checks prevent task completion. Interrupted checks remain visible: inspect their state, then use `task abandon-check --session SESSION --check-id ID --reason 'Explanation'` before recording replacement evidence. Abandoning a check never marks it passed. Delivery fingerprints each repository once per inspection.
 
@@ -89,16 +132,16 @@ For usage measurement, `usage --provider codex|claude --file native-events.jsonl
 
 Doctor checks setup-owned keys and hooks independently of your model choices, preferences, and native trust state. It also checks deployed runtime source hashes, metadata access, and duplicate skill discovery directories. Unmanaged duplicate skills are reported, not removed automatically. Claude read-only roles keep their restricted tools; the lead supplies saved diffs and command/browser evidence. Each generated Claude role now declares its effort explicitly.
 
-## Change, deploy, recover
+## Maintainer deployment interface
 
-Edit maintained source in an isolated candidate for behavior changes, run relevant tests and behavioral trials, then present the exact diff for user review. Do not edit generated native files independently. Keep the active release stable during tasks.
+Prefer `install.py` for normal lifecycle operations. The lower-level `engctl config` interface remains available. Edit maintained source in an isolated candidate for behavior changes, run relevant tests and behavioral trials, then present the exact diff for user review. Do not edit generated native files independently. Keep the active release stable during tasks.
 
 ```powershell
 python -B -m unittest discover -s tests -v
 python -B $eng config build
-python -B $eng config diff 'C:/Users/guyr2/.codex/agent-setup/build/deployment.json'
+python -B $eng config diff 'build/deployment.json'
 # Only after actual approval of that concrete configuration change:
-python -B $eng config apply 'C:/Users/guyr2/.codex/agent-setup/build/deployment.json' --approval-ref 'User approval reference'
+python -B $eng config apply 'build/deployment.json' --approval-ref 'User approval reference'
 python -B $eng doctor
 # If authorized and needed:
 python -B $eng config rollback 'C:/path/to/release.json' --approval-ref 'User rollback request'
@@ -108,7 +151,7 @@ Build refuses unmanaged collisions and local edits to owned instructions. After 
 
 The hook dispatcher runs the Python files in this maintained directory. Therefore, **editing runtime Python or policy.json here changes live hook behavior** once hooks are trusted. Develop candidates in a separate checkout and promote them only after review, between tasks. The deployment rollback restores generated native files; a runtime-code rollback additionally requires restoring the reviewed source revision from this directory's Git history. Inspect local changes first and preserve unrelated work. Do not claim a native-file rollback alone has rolled back Python behavior.
 
-The activation approval reference is an audit trail, not an authentication mechanism. Runtime permissions and the user's actual instructions still govern who may apply changes. The initial implementation is authorized by the user's request to implement this setup; future behavior changes require their review.
+The activation approval reference is an audit trail, not an authentication mechanism. Runtime permissions and the user's actual instructions still govern who may apply changes. An explicit human request to install authorizes its reviewed changes; future behavioral changes still require review.
 
 ## Reference documentation
 

@@ -12,6 +12,18 @@ from contextlib import contextmanager, closing
 
 ROOT = Path(__file__).resolve().parent
 POLICY = json.loads((ROOT / 'policy.json').read_text(encoding='utf-8'))
+LOCAL_PATH = Path(os.environ.get('ENG_SETUP_LOCAL_CONFIG') or ROOT / 'local.json').expanduser()
+if not LOCAL_PATH.is_absolute():
+    raise ValueError('ENG_SETUP_LOCAL_CONFIG must be an absolute path so hooks cannot select project-local policy.')
+LOCAL = json.loads(LOCAL_PATH.read_text(encoding='utf-8-sig')) if LOCAL_PATH.exists() else {}
+if not isinstance(LOCAL, dict) or set(LOCAL) - {'protected_roots', 'profiles'}:
+    raise ValueError('local.json supports only protected_roots and profiles.')
+if 'protected_roots' in LOCAL:
+    roots = LOCAL['protected_roots']
+    if not isinstance(roots, list) or not all(isinstance(p, str) and Path(p).expanduser().is_absolute() for p in roots):
+        raise ValueError('protected_roots must be absolute paths.')
+    POLICY['protected_roots'] = [str(Path(p).expanduser().resolve()) for p in roots]
+
 STATE = ROOT / 'state'
 
 def canonical(path):

@@ -74,7 +74,7 @@ def doctor():
     if duplicates:
         warnings.append('Duplicate skill discovery paths exist; preserved unmanaged copies: ' + ', '.join(duplicates))
     return {'version': lib.POLICY['version'], 'skills': len(skills), 'agents': len(lib.read_json(lib.ROOT / 'roles.json')),
-            'installed': bool(manifest), 'errors': errors, 'warnings': warnings, 'state': state,
+            'installed': bool(manifest and manifest.get('files')), 'errors': errors, 'warnings': warnings, 'state': state,
             'source_hashes': configure.source_hashes(),
             'hook_trust': 'Not asserted by this tool. Review /hooks in the native clients after installation or hook changes.',
             'behavioral_evaluation': 'Run paired trials and score outcomes; static checks alone do not prove agent behavior.'}
