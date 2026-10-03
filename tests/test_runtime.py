@@ -120,7 +120,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(lib.STATE.exists())
 
     def test_events_concurrent(self):
-        lib.db().close()
+        with lib.db(): pass
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(pool.map(lambda n: lib.event(str(n), self.root, 'Stop'), range(24)))
         with lib.db() as c: count = c.execute('SELECT COUNT(*) FROM events').fetchone()[0]
@@ -172,12 +172,12 @@ class RuntimeTests(unittest.TestCase):
     def test_config_apply_rollback_and_drift(self):
         home = self.root / 'home'; (home / '.claude').mkdir(parents=True)
         original = b'{"theme":"dark"}\n'; (home / '.claude/settings.json').write_bytes(original)
-        plan = configure.build(home); release = configure.apply(plan, 'test fixture authorization')
+        plan = configure.build(home, self.root / 'build/deployment.json'); release = configure.apply(plan, 'test fixture authorization')
         self.assertTrue((home / '.codex/skills/eng-project-setup/SKILL.md').exists())
         configure.rollback(release, 'test fixture rollback')
         self.assertFalse((home / '.codex/AGENTS.md').exists())
         self.assertEqual((home / '.claude/settings.json').read_bytes(), original)
-        plan = configure.build(home)
+        plan = configure.build(home, self.root / 'build/deployment.json')
         (home / '.claude/settings.json').write_text('{"theme":"light"}')
         with self.assertRaises(ValueError): configure.apply(plan, 'test fixture')
         self.assertFalse((home / '.codex/AGENTS.md').exists())
@@ -185,7 +185,7 @@ class RuntimeTests(unittest.TestCase):
     def test_config_unmanaged_collision(self):
         home = self.root / 'home'; (home / '.codex').mkdir(parents=True)
         (home / '.codex/AGENTS.md').write_text('user-owned instructions')
-        with self.assertRaises(ValueError): configure.build(home)
+        with self.assertRaises(ValueError): configure.build(home, self.root / 'build/deployment.json')
         with self.assertRaises(ValueError): configure.checked_target(home, '../KeepHQ/file')
 
     def test_evidence_currency(self):

@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager, closing
 
 ROOT = Path(__file__).resolve().parent
 POLICY = json.loads((ROOT / 'policy.json').read_text(encoding='utf-8'))
@@ -55,19 +56,71 @@ def atomic(path, data):
 def save_json(path, value):
     atomic(path, json.dumps(value, indent=2, ensure_ascii=False) + '\n')
 
+class StateUnavailable(RuntimeError):
+    """Actionable state-access failure, without exposing stored content."""
+
+
+def runtime_dir():
+    return writable(os.environ.get('ENG_SETUP_STATE_DIR') or STATE / 'runtime')
+
+
+@contextmanager
 def db():
-    writable(STATE).mkdir(parents=True, exist_ok=True)
-    c = sqlite3.connect(STATE / 'runtime.sqlite3', timeout=0.25)
-    c.execute('PRAGMA journal_mode=WAL')
-    c.executescript('''
+    # Runtime metadata is separate from deployment backups. Do not change ACLs,
+    # silently fork state, or toggle the shared journal mode on every hook call.
+    c = None
+    try:
+        directory = runtime_dir()
+        if (STATE / 'runtime.sqlite3').exists() and not (directory / 'runtime.sqlite3').exists():
+            raise StateUnavailable('Legacy state exists. Run engctl state migrate with host access before using this runtime; no empty replacement was created.')
+        directory.mkdir(parents=True, exist_ok=True)
+        c = sqlite3.connect(directory / 'runtime.sqlite3', timeout=1.0)
+        c.executescript('''
     CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY, at REAL, scope TEXT, session TEXT, event TEXT, tool TEXT, outcome TEXT);
+    CREATE TABLE IF NOT EXISTS event_details (
+      event_id INTEGER PRIMARY KEY, provider TEXT, duration_ms REAL);
     CREATE TABLE IF NOT EXISTS tasks (
       session TEXT PRIMARY KEY, root TEXT, body TEXT);
     CREATE TABLE IF NOT EXISTS facts (
       scope TEXT, id TEXT, body TEXT, PRIMARY KEY(scope,id));
     ''')
-    return c
+        yield c
+        c.commit()
+    except (sqlite3.Error, OSError) as exc:
+        if c:
+            c.rollback()
+        raise StateUnavailable(
+            'Runtime state is unavailable. Check access to the metadata directory '
+            f'{runtime_dir()}; use the same ENG_SETUP_STATE_DIR for CLI and hooks. '
+            'No fallback database was created. Native permissions remain authoritative.'
+        ) from exc
+    finally:
+        if c:
+            c.close()
+
+
+def migrate_state():
+    """Explicit one-time copy; never replace an existing metadata database."""
+    source = STATE / 'runtime.sqlite3'
+    target = runtime_dir() / 'runtime.sqlite3'
+    if target.exists():
+        raise ValueError('Runtime database already exists; refusing to replace it.')
+    if not source.is_file():
+        raise ValueError('No legacy runtime database exists.')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = target.with_suffix('.migrating')
+    try:
+        with closing(sqlite3.connect(source.as_uri() + '?mode=ro', uri=True)) as old:
+            with closing(sqlite3.connect(temp)) as new:
+                old.backup(new)
+                new.execute('PRAGMA journal_mode=DELETE')
+        os.replace(temp, target)
+    except Exception:
+        if temp.exists():
+            temp.unlink()
+        raise
+    return {'source': str(source), 'target': str(target), 'legacy_preserved': True}
 
 def git(root, *args, timeout=10):
     result = subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=timeout)
@@ -135,14 +188,31 @@ def put_task(session, task):
     with db() as c:
         c.execute('INSERT OR REPLACE INTO tasks VALUES (?,?,?)', (session, task['root'], json.dumps(task)))
 
-def event(session, root, name, tool='', outcome='unknown'):
+
+def update_task(session, change, expected_id=None):
+    """Mutate the latest task in a single writer transaction; never stale-replace."""
+    with db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        row = c.execute('SELECT body FROM tasks WHERE session=?', (session,)).fetchone()
+        task = json.loads(row[0]) if row else None
+        if expected_id is not None and (not task or task.get('id') != expected_id):
+            raise ValueError('Task changed while the operation was running.')
+        updated = change(task)
+        writable(updated['root'])
+        c.execute('INSERT OR REPLACE INTO tasks VALUES (?,?,?)',
+                  (session, updated['root'], json.dumps(updated)))
+    return updated
+
+def event(session, root, name, tool='', outcome='unknown', provider='unknown', duration_ms=None):
     if protected(root):
         return
     with db() as c:
-        c.execute('INSERT INTO events(at,scope,session,event,tool,outcome) VALUES (?,?,?,?,?,?)',
+        cursor = c.execute('INSERT INTO events(at,scope,session,event,tool,outcome) VALUES (?,?,?,?,?,?)',
                   (time.time(), scope_id(root), digest(session.encode())[:24], name[:40], tool[:80], outcome[:24]))
+        c.execute('INSERT INTO event_details VALUES (?,?,?)', (cursor.lastrowid, provider, duration_ms))
         if name == 'SessionStart':
             c.execute('DELETE FROM events WHERE at < ?', (time.time() - POLICY['event_retention_days'] * 86400,))
+            c.execute('DELETE FROM event_details WHERE event_id NOT IN (SELECT id FROM events)')
 
 def fact_add(root, item):
     root = writable(root)

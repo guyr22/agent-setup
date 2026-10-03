@@ -3,6 +3,7 @@ import base64
 import difflib
 import json
 from pathlib import Path
+import re
 import sys
 import time
 import tomllib
@@ -16,9 +17,29 @@ END = '# END eng-setup managed agents'
 def merge_toml(old):
     block = f'{BEGIN}\n[agents]\nenabled = true\nmax_concurrent_threads_per_session = {POLICY["max_children"]}\n{END}'
     if BEGIN in old:
-        start, tail = old.split(BEGIN, 1)
-        _, end = tail.split(END, 1)
-        result = start + block + end
+        if END not in old:
+            raise ValueError('Incomplete managed agents marker; reconcile native configuration.')
+        desired = {'enabled': True, 'max_concurrent_threads_per_session': POLICY['max_children']}
+        parsed = tomllib.loads(old)
+        agents = parsed.get('agents', {})
+        if all(type(agents.get(k)) is type(v) and agents.get(k) == v for k, v in desired.items()):
+            return old
+        # Native writers may insert trust/settings sections inside our markers.
+        # Those markers establish ownership of agent keys, not an erasable region.
+        header = re.search(r'(?m)^[ \t]*\[agents\][ \t]*(?:#[^\n]*)?\r?$', old)
+        if not header:
+            raise ValueError('Managed agents section was rewritten; reconcile its format explicitly.')
+        next_header = re.search(r'(?m)^[ \t]*\[', old[header.end():])
+        end = header.end() + next_header.start() if next_header else len(old)
+        section = old[header.end():end]
+        for key, value in desired.items():
+            replacement = f'{key} = {str(value).lower()}'
+            pattern = rf'(?m)^[ \t]*{re.escape(key)}[ \t]*=[^\r\n]*'
+            if re.search(pattern, section):
+                section = re.sub(pattern, replacement, section, count=1)
+            else:
+                section = '\n' + replacement + section
+        result = old[:header.end()] + section + old[end:]
     elif 'agents' in tomllib.loads(old):
         raise ValueError('Existing agents settings need an explicit merge; refusing to replace them.')
     else:
@@ -79,14 +100,19 @@ def render(home=HOME):
         }.items()) + '\n'
         tomllib.loads(content)
         result[f'.codex/agents/{role["name"]}.toml'] = content
-        fields = {'name': role['name'], 'description': role['description'], 'model': profile['claude_model']}
+        fields = {'name': role['name'], 'description': role['description'], 'model': profile['claude_model'],
+                  'effort': profile['effort']}
+        claude_instructions = instructions
         if role['access'] == 'read':
             fields['tools'] = 'Read, Grep, Glob'
+            claude_instructions += (' The lead must supply a saved diff or evidence file when the assignment requires Git, '
+                                    'command output, or browser evidence. You cannot run shell commands with this role. '
+                                    'Report missing evidence to the lead instead of guessing or requesting wider permissions.')
         elif role['access'] == 'verify':
             fields['disallowedTools'] = 'Edit, Write, NotebookEdit, Agent'
         else:
             fields['disallowedTools'] = 'Agent'
-        result[f'.claude/agents/{role["name"]}.md'] = '---\n' + '\n'.join(f'{k}: {json.dumps(v)}' for k, v in fields.items()) + '\n---\n\n' + instructions + '\n'
+        result[f'.claude/agents/{role["name"]}.md'] = '---\n' + '\n'.join(f'{k}: {json.dumps(v)}' for k, v in fields.items()) + '\n---\n\n' + claude_instructions + '\n'
     for name, profile in profiles.items():
         result[f'.codex/eng-{name}.config.toml'] = f'model = {json.dumps(profile["codex_model"])}\nmodel_reasoning_effort = {json.dumps(profile["effort"])}\n'
     old_config = home / '.codex/config.toml'
@@ -114,13 +140,48 @@ def checked_target(home, name):
         raise ValueError('Deployment target escapes native configuration root.')
     return target
 
-def build(home=HOME):
+def source_hashes():
+    paths = list(ROOT.glob('*.py')) + [ROOT / name for name in ('policy.json', 'profiles.json', 'roles.json', 'instructions.md')]
+    paths += list((ROOT / 'skills').glob('eng-*/SKILL.md'))
+    paths += list((ROOT / 'evals').glob('*.py'))
+    return {p.relative_to(ROOT).as_posix(): digest(p.read_bytes()) for p in sorted(paths)}
+
+
+def owned_projection(name, raw):
+    """Compare only setup-owned settings; user choices and hook trust are native."""
+    text = raw.decode('utf-8-sig')
+    if name == '.codex/config.toml':
+        agents = tomllib.loads(text).get('agents', {})
+        return {k: agents.get(k) for k in ('enabled', 'max_concurrent_threads_per_session')}
+    if name in ('.codex/hooks.json', '.claude/settings.json'):
+        hooks = json.loads(text).get('hooks', {})
+        marker = (ROOT / 'hooks.py').as_posix().lower()
+        return {event: [dict(entry, hooks=owned) for entry in entries
+                        if (owned := [h for h in entry.get('hooks', [])
+                                      if marker in h.get('command', '').replace('\\', '/').lower()])]
+                for event, entries in hooks.items()
+                if any(marker in h.get('command', '').replace('\\', '/').lower()
+                       for entry in entries for h in entry.get('hooks', []))}
+    return digest(raw)
+
+
+def matches_owned(row, raw):
+    try:
+        return owned_projection(row['path'], raw) == owned_projection(row['path'], base64.b64decode(row['after']))
+    except (ValueError, UnicodeError, AttributeError, TypeError):
+        return False
+
+
+def build(home=HOME, output=None):
     home = canonical(home)
+    if home != canonical(HOME) and output is None:
+        raise ValueError('An alternate home requires an explicit --output path to isolate its deployment plan.')
     files = render(home)
     previous = read_json(STATE / 'deployment.json', {})
     owned = {x['path'] for x in previous.get('files', [])} if previous.get('home') == str(home) else set()
     mergeable = {'.codex/config.toml', '.codex/hooks.json', '.claude/settings.json'}
-    manifest = {'version': POLICY['version'], 'home': str(home), 'created': time.time(), 'files': []}
+    manifest = {'version': POLICY['version'], 'home': str(home), 'created': time.time(),
+                'source_hashes': source_hashes(), 'files': []}
     for name, content in files.items():
         target = checked_target(home, name)
         before = target.read_bytes() if target.exists() else None
@@ -131,7 +192,7 @@ def build(home=HOME):
                'after_hash': digest(after), 'before': base64.b64encode(before).decode() if before is not None else None,
                'after': base64.b64encode(after).decode()}
         manifest['files'].append(row)
-    path = ROOT / 'build/deployment.json'
+    path = Path(output) if output else ROOT / 'build/deployment.json'
     save_json(path, manifest)
     return path
 
@@ -150,6 +211,8 @@ def apply(plan, approval):
         raise ValueError('An actual user approval reference is required; a CLI argument is not authorization by itself.')
     m = read_json(plan)
     home = canonical(m['home'])
+    if m.get('source_hashes') is not None and m['source_hashes'] != source_hashes():
+        raise ValueError('Maintained source changed since build; regenerate and review the deployment.')
     # Preflight every target before the first mutation.
     for f in m['files']:
         target = checked_target(home, f['path'])

@@ -1,6 +1,6 @@
 # Shared engineering setup
 
-Maintained source for Guy's Codex and Claude Code configuration. Version 1.0.0.
+Maintained source for Guy's Codex and Claude Code configuration. Version 1.1.0.
 
 This installation adds 14 skills, eight specialized roles, four Codex launch profiles, native hook definitions, and a standard-library Python runtime for project scaffolding, task evidence, project facts, and inactive improvement proposals. Existing managed plugins, auth, user preferences, and chats are preserved. No project has been configured by the installation. KeepHQ is protected from setup/runtime writes.
 
@@ -72,7 +72,15 @@ A fact requires `id`, `claim`, `source` (relative project file), `kind` = `verif
 
 A proposal requires `title`, `observations`, `hypothesis`, `change`, `risks`, `evaluation`, and `rollback`. It is stored inactive. See `evals/README.md` for 24 scenario seeds and a paired-trial scorer. No live evaluation outcomes are implied by the existence of the scenarios. No autonomous config activation or scheduled evaluation is installed.
 
-State is local under `state/` and excluded from source Git. Events retain metadata for 30 days, pruned at session start. Tasks/facts/proposals/backups persist until deliberately cleaned up. Do not put secrets or raw conversations in user-supplied records. Do not automatically query unrelated project scopes.
+State is local under `state/` and excluded from source Git. Runtime metadata lives in `state/runtime/runtime.sqlite3`; deployment backups and proposals remain separate. For a 1.0 installation, run `python -B $eng state migrate` once with host access before activation. This copies and preserves the legacy database and refuses to overwrite an existing destination. Use one consistent `ENG_SETUP_STATE_DIR` for CLI and hooks if relocating metadata. A state-access failure never silently creates a fallback database. Events retain metadata for 30 days, pruned at session start. Tasks/facts/proposals/backups persist until deliberately cleaned up. Do not put secrets or raw conversations in user-supplied records. Do not automatically query unrelated project scopes.
+
+On Windows, only the runtime metadata directory needs write access. Native sandbox restrictions can still block it even when an ordinary directory ACL grants access. Doctor distinguishes readable state from writable state. When writes are unavailable, run state-changing commands with authorized host access; do not create an empty fallback database or broaden sandbox permissions. The runtime never changes permissions. Structured protection of KeepHQ runs before database access, including native `apply_patch` command payloads.
+
+Concurrent verification and checkpoints merge inside database transactions. In-flight checks prevent task completion. Interrupted checks remain visible: inspect their state, then use `task abandon-check --session SESSION --check-id ID --reason 'Explanation'` before recording replacement evidence. Abandoning a check never marks it passed. Delivery fingerprints each repository once per inspection.
+
+For usage measurement, `usage --provider codex|claude --file native-events.jsonl` extracts final usage counters only. Save its output and attach selected, supported fields with `task metrics --session SESSION --file metrics.json`. Supported metrics include tokens/cache tokens, latency, retries, acceptance, defects, human correction time, and cost with a source reference. Missing counters and costs remain null. Claude's native USD figure is provider-reported API-equivalent usage, not proof of a subscription charge. Hooks never read transcripts or start model calls. Known native outcome envelopes produce success/failure/running metadata; unsupported formats stay unknown.
+
+Doctor checks setup-owned keys and hooks independently of your model choices, preferences, and native trust state. It also checks deployed runtime source hashes, metadata access, and duplicate skill discovery directories. Unmanaged duplicate skills are reported, not removed automatically. Claude read-only roles keep their restricted tools; the lead supplies saved diffs and command/browser evidence. Each generated Claude role now declares its effort explicitly.
 
 ## Change, deploy, recover
 

@@ -7,17 +7,14 @@ import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / 'state/validation-deps'))
-sys.path.insert(0, 'C:/Users/guyr2/.codex/skills/.system/skill-creator/scripts')
-from quick_validate import validate_skill
-import yaml
 import configure
 
 def main():
     problems = []
     for path in sorted((ROOT / 'skills').glob('eng-*')):
-        ok, message = validate_skill(path)
-        if not ok: problems.append(f'{path.name}: {message}')
+        content = (path / 'SKILL.md').read_text(encoding='utf-8')
+        if not content.startswith(f'---\nname: {path.name}\ndescription: ') or '\n---\n' not in content[4:]:
+            problems.append(f'{path.name}: invalid maintained skill frontmatter')
     for path in list(ROOT.glob('*.py')) + list((ROOT / 'evals').glob('*.py')):
         ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
     rendered = configure.render()
@@ -25,7 +22,10 @@ def main():
         if name.endswith('.toml'): tomllib.loads(content)
         elif name.endswith('.json'): json.loads(content)
         elif '/agents/' in name and name.endswith('.md'):
-            data = yaml.safe_load(content.split('---', 2)[1])
+            # The renderer emits a deliberately narrow YAML subset: keys and
+            # JSON-quoted scalar values. Validate it without an extra dependency.
+            data = {k: json.loads(v.strip()) for line in content.split('---', 2)[1].strip().splitlines()
+                    for k, v in [line.split(':', 1)]}
             if not all(k in data for k in ('name', 'description', 'model')): problems.append('Invalid agent ' + name)
     if problems:
         print('\n'.join(problems)); return 1
