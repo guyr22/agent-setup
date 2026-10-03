@@ -1,6 +1,6 @@
 # Shared engineering setup
 
-Maintained source for Guy's Codex and Claude Code configuration. Version 1.1.0.
+Maintained source for Guy's Codex and Claude Code configuration. Version 1.2.0.
 
 This installation adds 14 skills, eight specialized roles, four Codex launch profiles, native hook definitions, and a standard-library Python runtime for project scaffolding, task evidence, project facts, and inactive improvement proposals. Existing managed plugins, auth, user preferences, and chats are preserved. No project has been configured by the installation. KeepHQ is protected from setup/runtime writes.
 
@@ -12,16 +12,20 @@ Start a new chat/session after installation. Use ordinary requests for automatic
 
 > Use eng-workspace-setup to configure this multi-repository workspace, including its design repository and per-repository instructions.
 
-The project skill inspects first, creates a reviewable draft, preserves existing instructions, and applies only within the requested project. It does not initialize parent repositories, install plugins, or invent verified commands. The workspace skill establishes repository routing, contract ownership, revision combinations, and integration responsibilities.
+The project skill inspects first, asks about missing intent, prepares the specification for you, and applies only within the requested project. Start with [the project setup guide](PROJECT-SETUP.md), including natural-language requests for initial setup and later updates. A single project defaults to `AGENTS.md` and a `CLAUDE.md` import. A JSON registry and new VAULT are opt-in; existing documentation is reused. The skill does not initialize parent repositories, install plugins, or invent verified commands. The workspace skill establishes repository routing, contract ownership, revision combinations, and integration responsibilities.
 
 Focused fixes stay lightweight. Planned changes add criteria/checkpoints where useful. Program changes add explicit repository dependencies and integration evidence. Three children is the maximum, not a default team size. Native runtime limits may be stricter. Role tool restrictions are real where supported; verifier shell use remains governed by the native sandbox and task authorization.
 
 ## Native files and models
 
 - Source: `C:/Users/guyr2/.codex/agent-setup`.
-- Codex: `~/.codex/AGENTS.md`, `skills/eng-*`, `agents/eng-*.toml`, `hooks.json`, `eng-*.config.toml`.
+- Codex: `~/.codex/AGENTS.md`, `~/.agents/skills/eng-*`, `~/.codex/agents/eng-*.toml`, `~/.codex/hooks.json`, `~/.codex/eng-*.config.toml`.
 - Claude: `~/.claude/CLAUDE.md`, `skills/eng-*`, `agents/eng-*.md`, hooks merged into `settings.json`.
 - No third-party plugin installation or extra MCP server is required.
+
+The lean global agreement holds personal boundaries and workflow routing. Generic skills, roles, profiles, and hooks stay global; project requirements, commands, architecture navigation, conventions, and verified observations belong with each project. Claude discovers its own native files; references in those files call the shared Python runtime currently housed under `.codex/agent-setup`. It does not automatically load the `.codex` directory.
+
+Codex has one installed copy of each `eng-*` skill in the documented user discovery directory, `~/.agents/skills`. Version 1.2 retires only previously managed legacy `~/.codex/skills/eng-*/SKILL.md` files with exact-byte backups. Unrelated skill contents are preserved. New sessions are needed to refresh already loaded instructions and skill catalogs.
 
 The user's selected main model stays unchanged. Optional Codex CLI profiles: `codex -p eng-fast`, `codex -p eng-balanced`, `codex -p eng-deep`, `codex -p eng-review`. Current mappings are in `profiles.json`; use the native model picker for desktop main chats. Claude equivalents are `claude --model haiku`, `--model sonnet`, and `--model opus`; review uses Sonnet with an independent review brief. Mapper roles use fast models, implementation uses balanced, and consequential architecture/security review uses deep. Verify availability before future model changes. These choices are a policy starting point, not a measured cost/quality claim.
 
@@ -40,9 +44,12 @@ python -B $eng project inspect 'C:/path/to/project'
 python -B $eng project draft 'C:/path/to/project' --spec 'C:/path/to/inspected-spec.json'
 python -B $eng config diff 'C:/path/to/generated-draft.json'
 python -B $eng project apply 'C:/path/to/generated-draft.json'
+python -B $eng project validate 'C:/path/to/project' --spec 'C:/path/to/inspected-spec.json'
 ```
 
-Specification examples live in `templates/`. Replace their example content with inspected facts; they are not installed into projects automatically. Existing design/delivery/VAULT paths are reused. Existing instructions are preserved and extended; the acting agent must reconcile semantic contradictions before application. Backups are stored centrally. No source-writing operation is run by discovery.
+Specification examples live in `templates/`. The agent replaces their example content with inspected facts; they are not installed into projects automatically. `project draft --update` replaces only the bounded generated block and preserves surrounding manual instructions. Legacy blocks without an end marker and unowned registries need explicit reconciliation. Backups are stored centrally. Discovery executes no project scripts; validation checks references and imports, not command success or semantic correctness.
+
+Install paths are resolved during `config build`: maintained instructions/skills use `{{SETUP_ROOT}}` and `{{PYTHON}}`, filled from the checkout and interpreter running the build. `--home` selects the native configuration home (or use `ENG_SETUP_HOME` consistently). An alternate home requires an explicit `--output` plan. The default is the installed deployment's home, then the current OS user's home. Relocating the runtime later requires reviewing/removing old hook registrations and native trust; this release deliberately keeps the existing runtime path and hook commands.
 
 For a substantial task, use the session ID supplied by SessionStart, or a unique explicit session key if hooks are inactive. Register task scope, then record checkpoints and checks:
 
@@ -97,7 +104,7 @@ python -B $eng doctor
 python -B $eng config rollback 'C:/path/to/release.json' --approval-ref 'User rollback request'
 ```
 
-Build refuses unmanaged instruction collisions. Apply preflights target hashes, saves exact prior bytes, and reverts completed writes if a normal write fails. A process/power interruption can leave a partial installation; use the saved release manifest to inspect and repair before another apply. Rollback refuses later file drift. Native config merges preserve unrelated settings/hooks. Release manifests include merged settings backups, so keep state local and out of commits.
+Build refuses unmanaged collisions and local edits to owned instructions. After inspecting a collision, `config build --reconcile REVIEWED.json` can adopt an exact mapping of native relative paths to current SHA256 hashes; later drift still fails preflight. Apply preflights target hashes, saves exact prior bytes (including retired files), and reverts completed writes if a normal write fails. A process/power interruption can leave a partial installation; use the saved release manifest to inspect and repair before another apply. Rollback refuses later file drift and restores the preceding deployment record for releases created by 1.2. Native config merges preserve unrelated settings/hooks. Release manifests include merged settings backups, so keep state local and out of commits.
 
 The hook dispatcher runs the Python files in this maintained directory. Therefore, **editing runtime Python or policy.json here changes live hook behavior** once hooks are trusted. Develop candidates in a separate checkout and promote them only after review, between tasks. The deployment rollback restores generated native files; a runtime-code rollback additionally requires restoring the reviewed source revision from this directory's Git history. Inspect local changes first and preserve unrelated work. Do not claim a native-file rollback alone has rolled back Python behavior.
 
@@ -106,3 +113,7 @@ The activation approval reference is an audit trail, not an authentication mecha
 ## Reference documentation
 
 Provider schemas checked on 2026-10-02 against [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [Codex hooks](https://learn.chatgpt.com/docs/hooks), [Claude hooks](https://code.claude.com/docs/en/hooks), and [Claude subagents](https://code.claude.com/docs/en/sub-agents). Host versions at implementation: Codex 0.159.0-alpha.12.1 and Claude Code 2.1.220. Recheck schemas when upgrading; do not infer a feature works merely because the latest documentation describes it.
+
+The global/project split follows the context design principles described in [OpenAI's harness engineering](https://openai.com/index/harness-engineering/) and [Anthropic's effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents): keep entry points concise and load task-relevant detail progressively. Native skill discovery locations were checked on 2026-10-03 against [Codex skills](https://learn.chatgpt.com/docs/build-skills) and [Claude skills](https://code.claude.com/docs/en/skills). These sources inform the design; they do not establish a measured dollar saving for this installation.
+
+Version 1.2 native discovery was checked with the subsequently installed Codex CLI 0.160.0. Claude instruction/import files can be validated locally; live Claude model behavior remains unverified while the CLI is logged out.

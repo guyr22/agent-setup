@@ -2,16 +2,19 @@
 import base64
 import json
 from pathlib import Path
+import re
 import time
 from englib import ROOT, STATE, canonical, beneath, writable, git, digest, read_json, save_json, atomic
 
 MARKER = '<!-- eng-project-setup -->'
+END_MARKER = '<!-- /eng-project-setup -->'
 
 def inspect(root):
     root = canonical(root)
     names = ['AGENTS.md', 'CLAUDE.md', 'VAULT.md', 'README.md', 'package.json', 'pyproject.toml',
              'go.mod', 'Cargo.toml', 'Makefile', 'WORKSPACE.json', '.agent/project.json']
     found = [n for n in names if (root / n).is_file()]
+    instructions = (root / 'AGENTS.md').read_text(encoding='utf-8-sig') if 'AGENTS.md' in found else ''
     children = []
     for p in sorted(root.iterdir()):
         if p.is_dir() and not p.is_symlink() and (p / '.git').exists():
@@ -21,6 +24,11 @@ def inspect(root):
                 revision = 'unborn'
             children.append({'path': p.name, 'revision': revision})
     return {'root': str(root), 'is_git': (root / '.git').exists(), 'entrypoints': found,
+            'setup': 'managed' if END_MARKER in instructions else 'legacy-needs-reconciliation' if MARKER in instructions else 'unmanaged',
+            'default_outputs': ['AGENTS.md', 'CLAUDE.md'],
+            'intake': ['Read existing sources first. Ask only about missing goals, non-negotiable constraints, or authority conflicts.',
+                       'Use the existing documentation structure. Registry and new knowledge index are opt-in.',
+                       'Use project draft --update for an existing bounded setup; preserve everything outside its markers.'],
             'repositories': children, 'next': 'Read existing instructions, design and delivery sources; inspect CI for actual commands. No project scripts were executed.'}
 
 def local_ref(root, name, must_exist=True):
@@ -34,30 +42,50 @@ def local_ref(root, name, must_exist=True):
         raise ValueError('Referenced authority is missing: ' + name)
     return name.replace('\\', '/')
 
-def draft(root, spec):
-    root = writable(root)
+def prepare_spec(root, spec):
+    if not isinstance(spec, dict):
+        raise ValueError('Project specification must be an object.')
     for key in ('name', 'summary', 'kind', 'sources', 'commands'):
         if key not in spec:
             raise ValueError('Project specification is missing ' + key)
     if spec['kind'] not in ('project', 'workspace'):
         raise ValueError('kind must be project or workspace')
-    if MARKER in (root / 'AGENTS.md').read_text(encoding='utf-8') if (root / 'AGENTS.md').exists() else False:
-        raise ValueError('An installed setup exists. Inspect and update it deliberately instead of appending another copy.')
+    spec = json.loads(json.dumps(spec))
+    if MARKER in json.dumps(spec) or END_MARKER in json.dumps(spec):
+        raise ValueError('Project content must not contain setup ownership markers.')
+    for key in ('name', 'summary'):
+        if not isinstance(spec[key], str) or not spec[key].strip():
+            raise ValueError('Project name and summary must be nonempty strings.')
+    for key in ('registry', 'create_vault'):
+        if key in spec and type(spec[key]) is not bool:
+            raise ValueError(key + ' must be boolean.')
+    for key in ('invariants', 'conventions', 'open_questions'):
+        if not isinstance(spec.get(key, []), list) or not all(isinstance(x, str) for x in spec.get(key, [])):
+            raise ValueError(key + ' must contain concise strings.')
+    for key in ('sources', 'commands', 'domains', 'repositories'):
+        if not isinstance(spec.get(key, []), list) or not all(isinstance(x, dict) for x in spec.get(key, [])):
+            raise ValueError(key + ' must contain objects.')
     for source in spec['sources']:
         if source.get('role') not in ('instructions', 'design', 'decisions', 'delivery', 'verification', 'vault'):
             raise ValueError('Unknown source role')
-        local_ref(root, source['path'])
+        source['path'] = local_ref(root, source.get('path'))
     for command in spec['commands']:
         if not isinstance(command.get('argv'), list) or not command['argv'] or not all(isinstance(a, str) for a in command['argv']):
             raise ValueError('Commands use explicit argv arrays; they are documentation, not startup actions.')
-        local_ref(root, command.get('cwd', '.'))
+        command['cwd'] = local_ref(root, command.get('cwd', '.'))
+        if not (root / command.get('cwd', '.')).is_dir():
+            raise ValueError('Command cwd must be a directory.')
         if command.get('status') not in ('observed', 'verified') or not command.get('evidence'):
             raise ValueError('Commands require observed/verified status and evidence reference.')
+    for domain in spec.get('domains', []):
+        domain['path'] = local_ref(root, domain.get('path'))
+        if not domain.get('responsibility'):
+            raise ValueError('Domains require an observed responsibility.')
     if spec['kind'] == 'workspace':
         if not spec.get('repositories'):
             raise ValueError('A workspace requires an inspected repository registry.')
         for repo in spec['repositories']:
-            local_ref(root, repo['path'])
+            repo['path'] = local_ref(root, repo.get('path'))
             if not (root / repo['path'] / '.git').exists():
                 raise ValueError('Registry contains a non-Git directory: ' + repo['path'])
             if not repo.get('role'):
@@ -66,39 +94,88 @@ def draft(root, spec):
                 repo['revision'] = git(root / repo['path'], 'rev-parse', 'HEAD').decode().strip()
             except ValueError:
                 repo['revision'] = 'unborn'
+    return spec
+
+
+def instruction_block(text):
+    if text.count(MARKER) != 1 or text.count(END_MARKER) != 1 or text.index(END_MARKER) < text.index(MARKER):
+        raise ValueError('Legacy or ambiguous instruction markers: reconcile the exact owned region before updating; no text was replaced.')
+    return text.index(MARKER), text.index(END_MARKER) + len(END_MARKER)
+
+
+def imports_agents(text):
+    # A mention inside a fenced example is not an active Claude import.
+    fence = None
+    for line in text.lstrip('\ufeff').splitlines():
+        match = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if match:
+            token = match[1]
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence) and not line[match.end():].strip():
+                fence = None
+        elif fence is None and re.fullmatch(r'\s*@(?:\./)?AGENTS\.md\s*', line):
+            return True
+    return False
+
+
+def draft(root, spec, update=False):
+    root = writable(root)
+    spec = prepare_spec(root, spec)
+    existing = (root / 'AGENTS.md').read_bytes().decode('utf-8') if (root / 'AGENTS.md').exists() else ''
+    if MARKER in existing:
+        if not update:
+            raise ValueError('An installed setup exists. Inspect it and use --update with a reconciled specification.')
+        start, end = instruction_block(existing)
+    elif update:
+        raise ValueError('No managed instruction block exists; inspect existing text and draft initial setup without --update.')
+    elif END_MARKER in existing:
+        raise ValueError('Ambiguous instruction markers require reconciliation before drafting.')
     files = {}
     config_path = 'WORKSPACE.json' if spec['kind'] == 'workspace' else '.agent/project.json'
-    if (root / config_path).exists():
-        raise ValueError('Existing registry must be reconciled, not overwritten: ' + config_path)
-    spec = dict(spec, schema_version=1, authority='assistant-selected', created_at=time.time())
-    files[config_path] = json.dumps(spec, indent=2) + '\n'
-    lines = [MARKER, f'## {spec["name"]}: agent navigation', '', spec['summary'], '',
-             f'Project registry: `{config_path}`. Load only the sources relevant to the current task.', '',
-             '### Sources of authority', '']
-    for source in spec['sources']:
-        lines.append(f'- {source["role"]}: `{source["path"]}` — {source.get("description", "existing authority")}')
-    if not spec['sources']:
-        lines.append('No existing design authority was identified. Treat undocumented behavior as observed, not a product decision.')
-    lines += ['', '### Verification', '']
-    for command in spec['commands']:
-        lines.append(f'- {command.get("name", "check")}: `{json.dumps(command["argv"])}` in `{command.get("cwd", ".")}` ({command["status"]}; {command["evidence"]}).')
-    if not spec['commands']:
-        lines.append('No verification command has been established. Discover or implement appropriate checks before claiming verified delivery.')
-    lines += ['', '### Working rules', '',
-              'Use focused work for local changes; plan consequential work; coordinate cross-repository contracts explicitly.',
-              'Follow more specific area instructions. Preserve local changes. Keep worker write areas separate.',
-              'Design describes intended behavior; delivery records describe implementation and executed evidence.',
-              'The VAULT is a compact current index. Preserve decision provenance and supersession; do not duplicate specifications.',
-              'Automatically update only verified observations. Propose changes to workflow, permissions, or product decisions for review.',
-              'Before final delivery run the checks required by the affected repository and report limitations.', '']
-    existing = (root / 'AGENTS.md').read_text(encoding='utf-8-sig') if (root / 'AGENTS.md').exists() else ''
-    files['AGENTS.md'] = existing.rstrip() + ('\n\n' if existing else '') + '\n'.join(lines)
-    claude = (root / 'CLAUDE.md').read_text(encoding='utf-8-sig') if (root / 'CLAUDE.md').exists() else ''
-    if '@AGENTS.md' not in claude:
-        files['CLAUDE.md'] = claude.rstrip() + ('\n\n' if claude else '') + '@AGENTS.md\n'
-    if not any(s['role'] == 'vault' for s in spec['sources']) and not (root / 'VAULT.md').exists():
+    registry_exists = (root / config_path).exists()
+    old_registry = read_json(root / config_path, {})
+    registry = spec['kind'] == 'workspace' or spec.get('registry', registry_exists)
+    if registry_exists:
+        if not isinstance(old_registry, dict) or not registry or not update or old_registry.get('generator') != 'eng-project-setup':
+            raise ValueError('Existing registry must be reconciled, not overwritten or silently retired: ' + config_path)
+    if registry:
+        stored = dict(old_registry, **spec)
+        stored.update(schema_version=2, generator='eng-project-setup', authority='assistant-selected', updated_at=time.time())
+        files[config_path] = json.dumps(stored, indent=2) + '\n'
+    lines = [MARKER, f'## {spec["name"]}: agent navigation', '', spec['summary'], '']
+    if registry:
+        lines += [f'Read `{config_path}` for the authoritative navigation index, commands, boundaries, and open questions.',
+                  'Load only the referenced sources relevant to the task. Commands are documented, not executed by setup.']
+    else:
+        lines += ['### Sources of authority', '']
+        for source in spec['sources']:
+            lines.append(f'- {source["role"]}: `{source["path"]}` — {source.get("description", "existing authority")}')
+        if not spec['sources']:
+            lines.append('No design authority has been identified. Ask about missing intent; do not infer requirements from implementation.')
+        if spec.get('domains'):
+            lines += ['', '### Areas and ownership', '']
+            for area in spec['domains']:
+                lines.append(f'- `{area["path"]}`: {area["responsibility"]}; owner: {area.get("owner", "unknown")}.')
+        lines += ['', '### Verification', '']
+        for command in spec['commands']:
+            lines.append(f'- {command.get("name", "check")}: `{json.dumps(command["argv"])}` in `{command.get("cwd", ".")}` ({command["status"]}; {command["evidence"]}).')
+        if not spec['commands']:
+            lines.append('No verification command has been established. Discover appropriate checks before claiming verified delivery.')
+        for field, title in [('invariants', 'Project invariants'), ('conventions', 'Local conventions'), ('open_questions', 'Open questions')]:
+            if spec.get(field):
+                lines += ['', '### ' + title, ''] + ['- ' + text for text in spec[field]]
+    lines += ['', 'Use this project guidance with more specific area instructions. Requirements and decisions remain in their linked sources.',
+              'Preserve local changes; use the narrowest meaningful checks and report what actually ran. Setup does not grant deployment authority.',
+              END_MARKER]
+    block = '\n'.join(lines)
+    files['AGENTS.md'] = existing[:start] + block + existing[end:] if update else existing + ('\n\n' if existing and not existing.endswith('\n\n') else '') + block + '\n'
+    claude = (root / 'CLAUDE.md').read_bytes().decode('utf-8') if (root / 'CLAUDE.md').exists() else ''
+    if not imports_agents(claude):
+        files['CLAUDE.md'] = claude + ('\n\n' if claude and not claude.endswith('\n\n') else '') + '@AGENTS.md\n'
+    if spec.get('create_vault', False) and not any(s['role'] == 'vault' for s in spec['sources']) and not (root / 'VAULT.md').exists():
         files['VAULT.md'] = ('# Current project knowledge\n\nThis is a navigation index, not a transcript.\n\n'
-                             f'Project sources and commands: `{config_path}`.\n\n'
+                             'Project sources and commands: `AGENTS.md`.\n\n'
                              'Add only verified observations with source/revision, date, and revalidation trigger. '
                              'Link to design decisions and delivery evidence; do not copy them here. '
                              'Keep superseded history out of the active index. No facts have been verified by this scaffold.\n')
@@ -116,6 +193,38 @@ def draft(root, spec):
     path = STATE / 'project-drafts' / (digest(str(root).encode())[:16] + '.json')
     save_json(path, plan)
     return str(path)
+
+
+def validate(root, spec=None):
+    root = canonical(root)
+    errors = []
+    warnings = []
+    try:
+        agents = (root / 'AGENTS.md').read_text(encoding='utf-8-sig')
+        instruction_block(agents)
+        claude = (root / 'CLAUDE.md').read_text(encoding='utf-8-sig')
+        if not imports_agents(claude): errors.append('CLAUDE.md has no active @AGENTS.md import.')
+    except (ValueError, OSError) as exc:
+        errors.append(str(exc))
+    if spec is None:
+        for name in ('.agent/project.json', 'WORKSPACE.json'):
+            try:
+                value = read_json(root / name, {})
+            except (ValueError, OSError) as exc:
+                errors.append(str(exc)); continue
+            if isinstance(value, dict) and value.get('generator') == 'eng-project-setup':
+                spec = value; break
+    if spec is None:
+        warnings.append('Pass --spec to validate source references and command directories for a minimal setup.')
+    else:
+        try:
+            checked = prepare_spec(root, spec)
+            if not checked['commands']: warnings.append('No project verification commands are established.')
+            if checked.get('open_questions'): warnings.append('Project intent still has documented open questions.')
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            errors.append(str(exc))
+    return {'root': str(root), 'errors': errors, 'warnings': warnings, 'commands_executed': False,
+            'coverage': 'Instruction block/import plus provided registry/spec references; native client loading and command success require separate checks.'}
 
 def apply(plan):
     m = read_json(plan)

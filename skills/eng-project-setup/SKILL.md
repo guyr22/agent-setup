@@ -1,15 +1,16 @@
 ---
 name: eng-project-setup
-description: Create or adapt repository-specific agent instructions, knowledge navigation, verification commands, and improvement boundaries for a project.
+description: Collaboratively create or update a repository's Codex and Claude setup from its code, documentation, and the user's goals; use when asked to onboard or configure a specific project.
 ---
 
-Use for requested project setup, not every coding task. Read `C:/Users/guyr2/.codex/agent-setup/README.md` and `C:/Users/guyr2/.codex/agent-setup/templates/project-spec.example.json`. Runtime is `C:/Python313/python.exe C:/Users/guyr2/.codex/agent-setup/engctl.py`. KeepHQ is excluded from writes.
+Read `{{SETUP_ROOT}}/PROJECT-SETUP.md` for the intake, schema, commands, and update rules. Runtime: `{{PYTHON}} {{SETUP_ROOT}}/engctl.py`. KeepHQ is excluded.
 
-1. Run `project inspect ROOT`. Read existing AGENTS.md/CLAUDE.md, ancestor/area instructions, local changes, build manifests, CI, design/decisions, delivery records, and VAULT/index. Search scoped paths; inspection executes no repository scripts.
-2. Establish actual stack, commands, domains, sensitive boundaries, intended behavior sources, and checks. Distinguish observed commands from executed checks. Do not install dependencies or run migrations just for discovery. Reconcile existing setups instead of creating a competing tree.
-3. Fill the example specification with inspected facts. Reuse authoritative stores. Keep global policy global; project instructions need local commands/directories, ownership, invariants, and navigation. Add area instructions only where conventions differ materially, checking inheritance.
-4. Run `project draft ROOT --spec SPEC`, inspect with `config diff DRAFT`, resolve conflicts/import duplication, then `project apply DRAFT`. Setup authorization covers these reversible files; ask only for material missing decisions. The tool preserves existing text, refuses concurrent drift, backs up originals, and never initializes Git/remotes.
-5. Complete requested documentation in the established store, separating product intent, decision provenance/supersession, planned checks, and executed delivery evidence. VAULT is a compact index, not a transcript or duplicate spec. Unknown behavior must remain unknown.
-6. Validate paths, command directories, native instruction discovery, relevant decision IDs/supersession, and representative focused/consequential task routing. Use read-only simulation unless coding changes were requested. Separate static validation from live agent evaluation.
+Inspect the requested repository before interviewing the user: existing AGENTS.md/CLAUDE.md, local changes, README, CI/scripts, architecture, requirements, decisions, and knowledge indexes. Read relevant area guidance. Inspection does not execute project scripts or install dependencies. If no root can be inferred, ask for the project path before touching a repository.
 
-Report files, authority map, checks, and unresolved decisions. Do not install project plugins, duplicate global skills, or change global behavior without need and authorization.
+Explain what you learned and ask only for missing decisions that materially change the setup: intended outcome, non-negotiable constraints, or conflicting sources of authority. Do not make the user fill out JSON or repeat facts discoverable locally. Continue independent work while answers are pending. A request for a plan or review alone does not authorize application.
+
+Prepare the specification yourself with observed or user-confirmed facts and clearly labeled open questions. Default to AGENTS.md plus a CLAUDE.md import. Reuse existing design and delivery documents; registry and a new VAULT are opt-in only when they solve an actual need. Keep project instructions portable, concise, and useful without this personal runtime. Put detailed intent in its authoritative document and link it.
+
+Show the proposed files and the consequential choices. For a setup request, reversible project instructions are already authorized; do not add a redundant approval gate. Draft, inspect the diff, then apply. Use --update only for an existing bounded managed block. Preserve surrounding instructions and existing Claude text. If legacy markers or an unmanaged registry make ownership ambiguous, reconcile the exact region before replacing it; never guess where user text ends.
+
+Validate references and native imports, run appropriate already-authorized project checks, and distinguish documented commands from executed results. Do not widen permissions, configure deployment, install plugins, or duplicate global skills as a side effect. Give the user the resulting entry points, checks, unresolved decisions, and an example request for future updates. Scope any ongoing work to the project they named.

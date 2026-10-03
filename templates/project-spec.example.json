@@ -3,13 +3,35 @@
   "name": "Replace with inspected project name",
   "summary": "Replace with observed purpose and domain boundaries.",
   "sources": [
-    {"role": "design", "path": "docs/design.md", "description": "Existing intended behavior; verify this path."},
-    {"role": "delivery", "path": "docs/status.md", "description": "Existing implementation and executed evidence."}
+    {
+      "role": "design",
+      "path": "docs/design.md",
+      "description": "Existing intended behavior; verify this path."
+    },
+    {
+      "role": "delivery",
+      "path": "docs/status.md",
+      "description": "Existing implementation and executed evidence."
+    }
   ],
   "commands": [
-    {"name": "unit", "argv": ["python", "-m", "unittest", "discover"], "cwd": ".", "status": "observed", "evidence": "Replace with actual CI path/job; this example was not executed."}
+    {
+      "name": "unit",
+      "argv": [
+        "python",
+        "-m",
+        "unittest",
+        "discover"
+      ],
+      "cwd": ".",
+      "status": "observed",
+      "evidence": "Replace with actual CI path/job; this example was not executed."
+    }
   ],
   "invariants": [],
   "domains": [],
-  "open_questions": []
+  "open_questions": [],
+  "registry": false,
+  "create_vault": false,
+  "conventions": []
 }

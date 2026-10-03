@@ -9,4 +9,4 @@ Update existing delivery records with implementation and executed evidence. Keep
 
 Describe the concrete problem, resulting behavior, verification, and material limits. Cross-repository delivery needs order and compatibility details. Commit, open/attach PRs, merge, deploy, or message others only as authorized. Preparation alone does not authorize those actions.
 
-Close registered work with `task finish` from `C:/Users/guyr2/.codex/agent-setup/README.md`; provide an honest reason for incomplete evidence. Preserve verified project observations and propose workflow improvements without activating them.
+Close registered work with `task finish` from `{{SETUP_ROOT}}/README.md`; provide an honest reason for incomplete evidence. Preserve verified project observations and propose workflow improvements without activating them.

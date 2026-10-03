@@ -173,7 +173,7 @@ class RuntimeTests(unittest.TestCase):
         home = self.root / 'home'; (home / '.claude').mkdir(parents=True)
         original = b'{"theme":"dark"}\n'; (home / '.claude/settings.json').write_bytes(original)
         plan = configure.build(home, self.root / 'build/deployment.json'); release = configure.apply(plan, 'test fixture authorization')
-        self.assertTrue((home / '.codex/skills/eng-project-setup/SKILL.md').exists())
+        self.assertTrue((home / '.agents/skills/eng-project-setup/SKILL.md').exists())
         configure.rollback(release, 'test fixture rollback')
         self.assertFalse((home / '.codex/AGENTS.md').exists())
         self.assertEqual((home / '.claude/settings.json').read_bytes(), original)

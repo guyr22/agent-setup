@@ -42,6 +42,9 @@ def doctor():
     if manifest:
         for f in manifest['files']:
             p = configure.checked_target(Path(manifest['home']), f['path'])
+            if f['after'] is None:
+                if p.exists(): errors.append('Retired skill was recreated: ' + f['path'])
+                continue
             if not p.exists() or not configure.matches_owned(f, p.read_bytes()):
                 errors.append('Installed drift: ' + f['path'])
         baseline = manifest.get('source_hashes')
@@ -66,7 +69,7 @@ def doctor():
             warnings.append('Metadata is readable but writes are unavailable in this execution context. Run state-changing engctl commands with authorized host access; do not broaden sandbox permissions.')
     except lib.StateUnavailable as exc:
         warnings.append(str(exc))
-    duplicate_root = configure.HOME / '.agents/skills'
+    duplicate_root = configure.HOME / '.codex/skills'
     duplicates = [p.parent.name for p in skills if (duplicate_root / p.parent.name / 'SKILL.md').is_file()]
     if duplicates:
         warnings.append('Duplicate skill discovery paths exist; preserved unmanaged copies: ' + ', '.join(duplicates))
@@ -205,6 +208,8 @@ def parser():
     sub.add_parser('doctor')
     c = sub.add_parser('config').add_subparsers(dest='action', required=True)
     q = c.add_parser('build'); q.add_argument('--output', type=Path)
+    q.add_argument('--home', type=Path, default=configure.HOME)
+    q.add_argument('--reconcile', type=Path, help='JSON mapping reviewed native paths to their current SHA256 hashes')
     for action in ('diff', 'apply', 'rollback'):
         q = c.add_parser(action)
         q.add_argument('file', type=Path)
@@ -212,8 +217,9 @@ def parser():
             q.add_argument('--approval-ref', required=True)
     s = sub.add_parser('project').add_subparsers(dest='action', required=True)
     q = s.add_parser('inspect'); q.add_argument('root')
-    q = s.add_parser('draft'); q.add_argument('root'); q.add_argument('--spec', required=True)
+    q = s.add_parser('draft'); q.add_argument('root'); q.add_argument('--spec', required=True); q.add_argument('--update', action='store_true')
     q = s.add_parser('apply'); q.add_argument('file')
+    q = s.add_parser('validate'); q.add_argument('root'); q.add_argument('--spec')
     t = sub.add_parser('task').add_subparsers(dest='action', required=True)
     for action in ('start', 'show', 'checkpoint', 'metrics', 'finish', 'evidence', 'abandon-check'):
         q = t.add_parser(action); q.add_argument('--session', required=True)
@@ -244,13 +250,16 @@ def main():
     if a.group == 'doctor':
         result = doctor(); output(result); return bool(result['errors'])
     if a.group == 'config':
-        if a.action == 'build': result = str(configure.build(output=a.output))
+        if a.action == 'build': result = str(configure.build(home=a.home, output=a.output, reconcile=lib.read_json(a.reconcile) if a.reconcile else None))
         elif a.action == 'diff': result = configure.deployment_diff(a.file)
         elif a.action == 'apply': result = configure.apply(a.file, a.approval_ref)
         else: result = configure.rollback(a.file, a.approval_ref)
     elif a.group == 'project':
         if a.action == 'inspect': result = projects.inspect(a.root)
-        elif a.action == 'draft': result = projects.draft(a.root, lib.read_json(a.spec))
+        elif a.action == 'draft': result = projects.draft(a.root, lib.read_json(a.spec), update=a.update)
+        elif a.action == 'validate':
+            result = projects.validate(a.root, lib.read_json(a.spec) if a.spec else None)
+            output(result); return bool(result['errors'])
         else: result = projects.apply(a.file)
     elif a.group == 'task':
         if a.action == 'evidence':

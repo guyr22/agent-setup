@@ -9,4 +9,4 @@ Map producer/consumer contracts and dependencies, compatibility windows, and tes
 
 Brief each worker with objective, base revision, instructions/design references, allowed files/actions, dependencies, acceptance checks, output format, and time/tool budget. The lead owns integration and reconciles assumptions.
 
-Verify each affected repository and an explicit integration matrix. Keep implemented, verified, merged, deployed, and production-observed states distinct. Prepare delivery/rollback order; execute external actions only within authorization. Checkpoint contracts, owners, revisions, and pending edges using `C:/Users/guyr2/.codex/agent-setup/README.md`.
+Verify each affected repository and an explicit integration matrix. Keep implemented, verified, merged, deployed, and production-observed states distinct. Prepare delivery/rollback order; execute external actions only within authorization. Checkpoint contracts, owners, revisions, and pending edges using `{{SETUP_ROOT}}/README.md`.

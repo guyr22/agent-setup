@@ -9,4 +9,8 @@ For planned work establish observable acceptance criteria, inspect relevant inst
 
 Load only the specialist skill needed at a decision boundary: investigation for unexplained behavior, planning for consequential choices, UI for rendered interaction, migration for compatibility transitions, review for independent assessment. Do not load the whole suite. If another skill is unavailable, perform the necessary work directly.
 
-Finish the authorized outcome, verify acceptance criteria, and state evidence and limitations. Repeated failure should change the hypothesis. For long work use task/checkpoint commands in `C:/Users/guyr2/.codex/agent-setup/README.md`; focused work can remain in conversation.
+Finish the authorized outcome, verify acceptance criteria, and state evidence and limitations. Repeated failure should change the hypothesis. For long work use task/checkpoint commands in `{{SETUP_ROOT}}/README.md`; focused work can remain in conversation.
+
+For substantial work register `engctl task`, maintain a concise checkpoint with completed work, next steps, decisions, and source references, and use `engctl verify` for command evidence. Before handoff or compaction update the checkpoint explicitly; hooks cannot infer missing state. Resume by reconciling the record with current code and user intent. Receipts prove command outcomes on a snapshot, not semantic correctness. Keep raw conversations and credentials out of state. For denied metadata writes, use authorized host execution or report the limitation; do not fork an empty state store or broaden permissions.
+
+Keep intended behavior and decisions in existing design sources, executed results in delivery evidence, and a VAULT only as a compact current index. Distinguish user decisions, assistant choices, verified observations, and proposals. Mark superseded material and keep current summaries consistent. Never rewrite a requirement merely to match implementation.

@@ -3,7 +3,7 @@ name: eng-doctor
 description: Diagnose missing skills, configuration drift, hook activation, model availability, or failures in the shared Codex and Claude Code setup.
 ---
 
-Run `C:/Python313/python.exe C:/Users/guyr2/.codex/agent-setup/engctl.py doctor`. Read the setup README for recovery. Compare source, rendered native files, and deployment record; preserve unmanaged settings and preferences.
+Run `{{PYTHON}} {{SETUP_ROOT}}/engctl.py doctor`. Read the setup README for recovery. Compare source, rendered native files, and deployment record; preserve unmanaged settings and preferences.
 
 Check native client versions/schemas before changes and model availability before retries. Inspect `/hooks`; Codex requires trust for exact hook definitions. Never forge trust or bypass it. New sessions may be needed to load changes.
 
