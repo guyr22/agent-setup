@@ -158,6 +158,15 @@ class InstallerTests(unittest.TestCase):
         cli('install','--target','both','--home',home,'--apply')
         self.assertNotIn('guyr2', (home/'.codex/AGENTS.md').read_text().split('Shared tooling')[0])
         self.assertNotIn('KeepHQ',(home/'.codex/AGENTS.md').read_text())
+        for role in ('eng-verifier', 'eng-ui-validator'):
+            codex = tomllib.loads((home/f'.codex/agents/{role}.toml').read_text())
+            claude_text = (home/f'.claude/agents/{role}.md').read_text()
+            claude = {k: json.loads(v.strip()) for line in claude_text.split('---', 2)[1].strip().splitlines()
+                      for k, v in [line.split(':', 1)]}
+            self.assertEqual(codex['model'], 'gpt-6-luna')
+            self.assertEqual(codex['sandbox_mode'], 'workspace-write')
+            self.assertEqual(claude['model'], 'haiku')
+            self.assertEqual(set(claude['disallowedTools'].split(', ')), {'Edit', 'Write', 'NotebookEdit', 'Agent'})
         self.assertTrue(json.loads(cli('status'))['installed'])
         cli('update','--apply')
         cli('uninstall','--apply')
@@ -171,6 +180,15 @@ class InstallerTests(unittest.TestCase):
             rendered=configure.render(home)
         self.assertEqual(tomllib.loads(rendered['.codex/config.toml'])['model'],'personal-main')
         self.assertEqual(tomllib.loads(rendered['.codex/eng-fast.config.toml'])['model'],'custom-fast')
+        for role in ('eng-verifier', 'eng-ui-validator'):
+            codex = tomllib.loads(rendered[f'.codex/agents/{role}.toml'])
+            claude_text = rendered[f'.claude/agents/{role}.md']
+            claude = {k: json.loads(v.strip()) for line in claude_text.split('---', 2)[1].strip().splitlines()
+                      for k, v in [line.split(':', 1)]}
+            self.assertEqual(codex['model'], 'custom-fast')
+            self.assertEqual(codex['model_reasoning_effort'], 'low')
+            self.assertEqual(claude['model'], 'haiku')
+            self.assertEqual(claude['effort'], 'low')
 
     def test_owned_hook_edit_is_not_silently_overwritten_on_update(self):
         home=self.root/'home';self.apply(home)

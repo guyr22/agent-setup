@@ -13,7 +13,7 @@ The agent handles discovery, the specification, and the commands. You supply int
 ## How the collaboration works
 
 1. **Inspect.** Read existing instructions, relevant documentation, code layout, CI/scripts, and local changes. Identify the authoritative sources for requirements, architecture, decisions, and delivery evidence. Inspection does not run project scripts.
-2. **Resolve missing intent.** Summarize the findings. Ask only about material gaps or conflicts, such as which of two specifications is authoritative. Record unanswered questions explicitly and continue independent setup work. Do not invent business rules, owners, verification results, or deployment targets.
+2. **Resolve missing intent.** Summarize the findings and propose the critical smoke journeys described below. Agree missing product priorities and expected outcomes with the user; preserve already established decisions. Ask only about material gaps or conflicts, such as which of two specifications is authoritative. Record unanswered questions explicitly and continue independent setup work. Do not invent business rules, owners, verification results, or deployment targets.
 3. **Prepare and apply.** Show the proposed files and choices. A request to set up the project authorizes reversible instruction changes. A request only to review or propose a plan does not authorize applying it. Preserve existing instructions, personal overrides, and work in progress.
 4. **Verify.** Validate references/imports and run the narrow appropriate project checks within authorization. Mark commands `observed` until actually executed. Report missing infrastructure or decisions without claiming completion of unverified behavior.
 
@@ -26,6 +26,22 @@ Set `registry: true` only when a tool or a larger project benefits from `.agent/
 Workspace mode deliberately writes `WORKSPACE.json` with repositories, roles, owners, revisions, contracts, and delivery order. The workspace instructions route to individual repositories; they do not repeat every repository's rules. External repositories need separately established scope. Do not initialize a parent Git repository or configure children merely because they were discovered.
 
 Global preferences, generic skills, roles, model profiles, and runtime stay global. Add project-specific skills, roles, native settings, or hooks only for a demonstrated need and within authorization. Do not put personal absolute paths, credentials, machine trust, or subscription details into shared project files. Commit shared instructions through the project's normal delivery workflow; setup alone does not authorize a push or deployment.
+
+## Agree a repeatable verification procedure
+
+Inspect existing requirements, user journeys, test scripts, and CI before proposing coverage. Present a small smoke suite that demonstrates the system's critical existing functions, alongside checks for the changed feature. Ask the user about missing priorities, supported environments, and consequential expected outcomes; do not ask them to design commands or reconfirm documented decisions. For example, a data-entry application's candidate journey might create a disposable record, reload, verify its saved values, and remove it. Derive the actual scenario and assertions from that project's requirements rather than adopting this example universally.
+
+Keep the procedure in existing verification/developer documentation or a concise AGENTS section when no separate document is needed. Link longer guidance as a `verification` source; keep executable commands in the existing command index and detailed behavior in its authoritative source. No new registry schema is required. Record:
+
+- **Environment:** startup commands and working directories, required services, readiness checks, test URL or other entry point, and how to identify the running version.
+- **Test session and data:** authorized test access without stored credentials, isolated fixtures, seed/reset steps, and cleanup limited to resources created for testing. Identify external side effects and unavailable dependencies.
+- **Scenarios:** named critical smoke journeys with prerequisites, concrete actions, and observable expected outcomes. Include browser interaction for UI systems and relevant backend effects such as persistence; use real API, CLI, or worker entry points for other systems. Mark mocked or substituted dependencies and the coverage they cannot establish.
+- **Regression selection:** which checks always run for relevant changes and which broaden coverage when shared components, contracts, or critical paths change. Reuse automated end-to-end suites and document manual/browser steps where automation is absent.
+- **Evidence and repair:** where reports, traces, screenshots, and relevant logs belong; record the tested snapshot/environment and actual outcomes. Fix introduced defects, rerun failed scenarios and affected regressions, and report unresolved blockers without claiming verified completion.
+
+Separate observed commands, proposed or user-agreed scenarios, and checks actually executed. Missing infrastructure or a missing smoke suite is an explicit gap with a concrete follow-up, not a passing result. Setup may document existing procedures and agreed coverage; it does not silently install a framework, provision services, or create a new automated suite. Keep subsequent test implementation within the user's authorized task.
+
+The main agent owns coverage and acceptance. When permitted and useful, fast verification workers execute explicit commands or scenario steps and return reproducible findings. Ambiguous failures, exploratory assessment, and high-risk judgment remain with the main agent; workers without the required tools report the gap for reassignment. Model routing stays in the shared configuration, not hard-coded into project instructions.
 
 ## Agent command reference
 
